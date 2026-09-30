@@ -27,6 +27,8 @@
     "predist:dir": "npm run prepare:native",
     "dist": "npm run build && electron-builder --win nsis",
     "dist:dir": "npm run build && electron-builder --win dir --config.forceCodeSigning=false --config.win.signExecutable=false",
+    "build:linux": "npm run typecheck && npm run build:electron && npm run build:renderer",
+    "dist:linux": "npm run build:linux && electron-builder --linux dir",
     "build:shim": "powershell -NoProfile -ExecutionPolicy Bypass -File native/steamshim/build-steam-shim.ps1",
     "test:native:voice-rank": "powershell -NoProfile -ExecutionPolicy Bypass -File native/vivoxproxy/test-voice-rank.ps1",
     "test:native:voice-volume": "powershell -NoProfile -ExecutionPolicy Bypass -File native/vivoxproxy/test-voice-volume.ps1",
@@ -114,29 +116,29 @@
       "ASSET_LICENSE.md",
       "THIRD_PARTY_NOTICES.md"
     ],
-    "extraResources": [
-      {
-        "from": "resources/patches",
-        "to": "patches",
-        "filter": [
-          "**/*.dll",
-          "**/*.sha256"
-        ]
-      },
-      {
-        "from": "resources/diagnostics",
-        "to": "diagnostics",
-        "filter": [
-          "ROTK.Diagnostics.exe",
-          "ROTK.Diagnostics.exe.sha256",
-          "PresentMon.exe",
-          "PresentMon.exe.sha256",
-          "PresentMon-LICENSE.txt"
-        ]
-      }
-    ],
     "win": {
       "icon": "build/icon.ico",
+      "extraResources": [
+        {
+          "from": "resources/patches",
+          "to": "patches",
+          "filter": [
+            "**/*.dll",
+            "**/*.sha256"
+          ]
+        },
+        {
+          "from": "resources/diagnostics",
+          "to": "diagnostics",
+          "filter": [
+            "ROTK.Diagnostics.exe",
+            "ROTK.Diagnostics.exe.sha256",
+            "PresentMon.exe",
+            "PresentMon.exe.sha256",
+            "PresentMon-LICENSE.txt"
+          ]
+        }
+      ],
       "requestedExecutionLevel": "asInvoker",
       "signExts": [
         "steam_api64.dll",
@@ -165,6 +167,29 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "ROTK Launcher"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/branding/rotk-mark.png",
+      "category": "Game",
+      "executableName": "rotk-launcher",
+      "extraResources": [
+        {
+          "from": "resources/patches",
+          "to": "patches",
+          "filter": [
+            "**/*.dll",
+            "**/*.sha256"
+          ]
+        }
+      ]
     }
   }
 }

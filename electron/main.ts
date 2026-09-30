@@ -119,6 +119,14 @@ import {
 } from "./services/gameplay-patch.js";
 
 app.setName(APP_NAME);
+// Chromium only picks a real keyring for desktops it recognises (GNOME, KDE…);
+// anywhere else (Hyprland, Sway…) it falls back to plain text and safeStorage
+// then refuses to store the player key. Ask for the Secret Service explicitly
+// unless the user chose a store on the command line.
+if (process.platform === "linux" && !app.commandLine.hasSwitch("password-store")) {
+  const desktop = (process.env.XDG_CURRENT_DESKTOP ?? "").toLocaleLowerCase("en-US");
+  app.commandLine.appendSwitch("password-store", desktop.includes("kde") ? "kwallet6" : "gnome-libsecret");
+}
 if (!app.isPackaged && process.env.ROTK_USER_DATA_DIR) {
   app.setPath("userData", resolve(process.env.ROTK_USER_DATA_DIR));
 } else {
@@ -404,7 +412,10 @@ async function installedLauncherFolder(): Promise<string | null> {
 async function applyRecommendedDestination(): Promise<void> {
   if (sourceKind !== "copy-required" || !sourceRoot) return;
   const { pendingInstallRoot } = await configStore.load();
-  const drives = [...new Set([parse(sourceRoot).root, `${process.env.SystemDrive ?? "C:"}\\`].map(value => value.toUpperCase()))];
+  // Drive letters are a Windows notion: elsewhere the home folder is the default.
+  const drives = process.platform === "win32"
+    ? [...new Set([parse(sourceRoot).root, `${process.env.SystemDrive ?? "C:"}\\`].map(value => value.toUpperCase()))]
+    : [app.getPath("home")];
   const candidates = [...(pendingInstallRoot ? [pendingInstallRoot] : [])];
   for (const drive of drives) {
     const details = await statDrive(drive);
@@ -1574,7 +1585,9 @@ async function initialize(): Promise<void> {
   launcherUpdate = new LauncherUpdateService({
     // In development there is no installed package to update against;
     // the updater stays inert and the snapshot reports "idle".
-    updater: app.isPackaged ? electronUpdater.autoUpdater : null,
+    // Releases only publish the Windows installer; a Linux build is updated by
+    // rebuilding it from source.
+    updater: app.isPackaged && process.platform === "win32" ? electronUpdater.autoUpdater : null,
     onChange: () => void broadcastSnapshot(),
     onDownloadError: (code) => startupLog.mark("launcher-update-failed", code),
   });

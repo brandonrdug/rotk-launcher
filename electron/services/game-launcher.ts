@@ -29,6 +29,7 @@ import { assertSteamShim, deploySteamShim } from "./steam-shim.js";
 import { prepareInterfaceInputProfile } from "./interface-input-profile.js";
 import { recoverInputProfile, type InputProfileRecovery } from "./input-profile-recovery.js";
 import { prepareWeaponStanceProfile, WEAPON_STANCE_ENABLED } from "./weapon-stance-profile.js";
+import { buildProtonCommand, toWinePath } from "./proton.js";
 
 const GAME_STARTUP_STABILITY_MS = 3_000;
 // Past the stability window the launch is reported as started. When the game
@@ -309,11 +310,13 @@ function buildLaunchArguments(
   installId: string,
   localCreateSessionUrl: string,
   locale: AppLocale,
+  clientPath: (path: string) => string = (path) => path,
 ): string[] {
   const gatewayCreateSession = validateLocalCreateSessionUrl(localCreateSessionUrl);
   const voiceGrantOrigin = validateVoiceGrantOrigin(runtime.voiceGrantOrigin);
-  const localLogs = join(logsRoot, installId, "local");
-  const failureLogs = join(logsRoot, installId, "failure");
+  // H1Z1 resolves these as Windows paths; under Proton that means `Z:\…`.
+  const localLogs = clientPath(join(logsRoot, installId, "local"));
+  const failureLogs = clientPath(join(logsRoot, installId, "failure"));
   return [
     `sessionid=${launchTicket}`,
     `server=${serverList(runtime)}`,
@@ -331,7 +334,7 @@ function buildLaunchArguments(
     "Logging:ConsoleLogLevel=999",
     "Logging:FileLogLevel=999",
     "Logging:LocalLogLevel=999",
-    `Logging:Directory=${join(logsRoot, installId)}`,
+    `Logging:Directory=${clientPath(join(logsRoot, installId))}`,
     `Logging:LocalDirectory=${localLogs}`,
     `Logging:FailureDirectory=${failureLogs}`,
   ];
@@ -514,13 +517,24 @@ export class GameLauncher {
         installation.installId,
         sessionGateway.createSessionUrl,
         request.locale,
+        process.platform === "win32" ? undefined : toWinePath,
       );
 
       const executable = join(installationRoot, "H1Z1.exe");
       diagnosticCallback(() => request.diagnostics?.onIdentity({ displayName: launchIdentity.displayName, steamId: launchIdentity.steamId }));
-      const child = spawn(executable, args, {
+      // Windows runs the PE directly; elsewhere the kernel cannot, and spawn
+      // would only return a pid-less child with EACCES on the next tick.
+      const launch = process.platform === "win32"
+        ? { command: executable, args, env: sanitizedEnvironment(launchIdentity) }
+        : await buildProtonCommand({
+          executable,
+          args,
+          env: sanitizedEnvironment(launchIdentity),
+          installationRoot,
+        });
+      const child = spawn(launch.command, launch.args, {
         cwd: installationRoot,
-        env: sanitizedEnvironment(launchIdentity),
+        env: launch.env,
         detached: true,
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: false,
@@ -530,6 +544,7 @@ export class GameLauncher {
         // A failed spawn emits 'error' on the next tick even though no process
         // exists. The launch caller records the failure; absorb the event here.
         child.once("error", () => undefined);
+        if (process.platform !== "win32") throw new Error(`Proton could not be started (${launch.command}).`);
         throw new Error("Windows n’a pas retourné l’identifiant du processus H1Z1.");
       }
       this.child = child;

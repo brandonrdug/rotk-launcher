@@ -4,6 +4,9 @@ import { access, readFile, stat } from "node:fs/promises";
 import { join, normalize } from "node:path";
 import { promisify } from "node:util";
 import { validateClientSource } from "./path-policy.js";
+import { linuxSteamRoots, parseLibraryFoldersVdf } from "./steam-paths.js";
+
+export { parseLibraryFoldersVdf } from "./steam-paths.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,6 +31,8 @@ export interface SteamLocatorDependencies {
   validateCandidate(path: string): Promise<string>;
   programFilesX86: string | null;
   programFiles: string | null;
+  /** Extra Steam roots searched after the registry ones (Linux installs). */
+  extraSteamRoots?: readonly string[];
 }
 
 async function readRegistrySteamPathFromWindows(): Promise<string | null> {
@@ -63,30 +68,12 @@ const DEFAULT_DEPENDENCIES: SteamLocatorDependencies = {
     }
   },
   validateCandidate: validateClientSource,
-  programFilesX86: process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)",
-  programFiles: process.env.ProgramFiles ?? null,
+  programFilesX86: process.platform === "win32"
+    ? process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)"
+    : null,
+  programFiles: process.platform === "win32" ? process.env.ProgramFiles ?? null : null,
+  extraSteamRoots: process.platform === "linux" ? linuxSteamRoots() : [],
 };
-
-/**
- * Extract every library root recorded in Steam's libraryfolders.vdf. The
- * parser is intentionally tolerant: it only reads `"path" "..."` pairs and
- * unescapes VDF backslash sequences, because the surrounding structure has
- * changed across Steam versions.
- */
-export function parseLibraryFoldersVdf(content: string): string[] {
-  const libraries: string[] = [];
-  const seen = new Set<string>();
-  for (const match of content.matchAll(/"path"\s*"((?:\\.|[^"\\])*)"/gi)) {
-    const raw = match[1].replace(/\\(.)/g, "$1").trim();
-    if (!raw) continue;
-    const library = normalize(raw);
-    const key = library.toLocaleLowerCase("en-US");
-    if (seen.has(key)) continue;
-    seen.add(key);
-    libraries.push(library);
-  }
-  return libraries;
-}
 
 /**
  * Best-effort discovery of an installed H1Z1 client: Steam root from the
@@ -105,6 +92,7 @@ export async function locateSteamClient(
   for (const programFiles of [deps.programFilesX86, deps.programFiles]) {
     if (programFiles) steamRoots.push(join(programFiles, "Steam"));
   }
+  steamRoots.push(...(deps.extraSteamRoots ?? []));
 
   const libraries: string[] = [];
   const seen = new Set<string>();

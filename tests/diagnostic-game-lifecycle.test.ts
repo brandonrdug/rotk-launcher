@@ -227,7 +227,7 @@ describe('game lifecycle remains independent of diagnostics', () => {
   it('spawn failures with no PID have an error listener before the process emits its failure', async () => {
     const f = await fixture();
     mocks.spawn.mockImplementation(() => { const child = new GameChild(); child.pid = undefined; children.push(child); return child; });
-    await expect(f.launcher.launch(f.request)).rejects.toThrow(/identifiant|Windows/);
+    await expect(f.launcher.launch(f.request)).rejects.toThrow(/identifiant|Windows|Proton/);
     expect(f.diagnostics.onSpawned).not.toHaveBeenCalled();
     expect(() => f.child().emit('error', new Error('ENOENT'))).not.toThrow();
     expect(f.child().kill).not.toHaveBeenCalled();
