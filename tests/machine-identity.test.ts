@@ -91,8 +91,17 @@ describe("collectHwid", () => {
     expect(await collectHwid(["machine_guid"], { run: async () => { throw new Error("wmi failed"); } })).toEqual({});
   });
 
-  it("returns an empty vector off Windows", async () => {
-    if (process.platform === "win32") return;
+  it("returns an empty vector off Windows and Linux", async () => {
+    if (process.platform === "win32" || process.platform === "linux") return;
     expect(await collectHwid(["machine_guid"], { run: async () => "{}" })).toEqual({});
+  });
+
+  it("reads Linux slots from the system instead of PowerShell", async () => {
+    if (process.platform !== "linux") return;
+    const vector = await collectHwid(["machine_guid", "not_a_slot"], {
+      run: async () => { throw new Error("PowerShell must not run on Linux"); },
+    });
+    expect(Object.keys(vector)).toEqual(["machine_guid"]);
+    expect(vector.machine_guid).toMatch(/^[0-9a-f]{32}$/);
   });
 });

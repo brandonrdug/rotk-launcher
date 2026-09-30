@@ -26,6 +26,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { windowsSystemToolPath } from "./windows-tools.js";
+import { readLinuxHwid } from "./machine-identity-linux.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -145,17 +146,30 @@ async function runPowerShell(script: string, timeoutMs: number): Promise<string>
 
 /**
  * Collect the fingerprint for the requested slots (the core five by default).
- * Non-Windows returns an empty vector (Linux/Proton is out of scope for v1;
- * the server treats the absence as no HWID signal). Never throws: a shell that
- * fails or times out yields the empty vector.
+ * Linux reads the same facts from sysfs/procfs (machine-identity-linux.ts);
+ * other platforms return an empty vector. Never throws: a shell that fails or
+ * times out yields the empty vector.
  */
 export async function collectHwid(
   requested: readonly string[] = HWID_CORE_SLOTS,
   options: { run?: (script: string) => Promise<string>; timeoutMs?: number } = {},
 ): Promise<Record<string, string>> {
-  if (process.platform !== "win32") return {};
+  if (process.platform !== "win32" && process.platform !== "linux") return {};
   const slots = selectHwidSlots(requested);
   if (slots.length === 0) return {};
+  if (process.platform === "linux") {
+    try {
+      const raw = await readLinuxHwid(slots);
+      const vector: Record<string, string> = {};
+      for (const slot of slots) {
+        const cleaned = cleanComponent(raw[slot]);
+        if (cleaned !== undefined) vector[slot] = cleaned;
+      }
+      return vector;
+    } catch {
+      return {};
+    }
+  }
   const timeoutMs = options.timeoutMs ?? 10_000;
   const run = options.run ?? ((script: string) => runPowerShell(script, timeoutMs));
   try {
