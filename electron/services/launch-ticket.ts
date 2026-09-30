@@ -245,7 +245,14 @@ function serviceError(status: number, value: unknown, attestationUnavailableReas
   if (status === 503 || errorCode === "service_unavailable") {
     return new Error("The ROTK account service is temporarily unavailable");
   }
-  return new Error("The ROTK account service refused the launch request");
+  // Name what the server said: an unrecognised refusal is otherwise
+  // indistinguishable from every other one.
+  const detail = [
+    `HTTP ${status}`,
+    typeof errorCode === "string" && errorCode ? errorCode.slice(0, 64) : null,
+    typeof payload?.message === "string" && payload.message ? payload.message.slice(0, 200) : null,
+  ].filter(Boolean).join(", ");
+  return new Error(`The ROTK account service refused the launch request (${detail})`);
 }
 
 function networkFailureCause(error: unknown, aborted: boolean): string {
