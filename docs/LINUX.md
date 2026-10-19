@@ -75,12 +75,20 @@ therefore asks for `--password-store=gnome-libsecret` (or `kwallet6` on KDE).
 
 ## Not available on Linux
 
-- Deathcomm voice helper (`RotkDeathcomm.exe`, a Windows .NET/WASAPI helper).
 - Native diagnostics (`ROTK.Diagnostics.exe`, PresentMon). Debug reports still
   collect text logs.
 - TPM anchor: Windows Platform Crypto Provider only. The server currently only
   logs its absence; if ROTK starts requiring it, or a Windows-only anti-cheat,
   this branch will stop working.
+
+## The bundled `rotkc.dll` module
+
+Since 2.0.40 the launcher ships `rotkc.dll`, a ROTK anti-cheat module that the
+voice proxy loads into the game. It is an ordinary user-mode DLL and loads
+fine under Proton (verified on 2.0.43 with GE-Proton10-27). The launcher's
+Windows-only Visual C++ runtime check is skipped on Linux because Proton
+provides that runtime. Whether ROTK treats Wine/Proton sessions differently
+is theirs to decide; this branch does nothing to hide that it runs there.
 
 ## Troubleshooting
 
