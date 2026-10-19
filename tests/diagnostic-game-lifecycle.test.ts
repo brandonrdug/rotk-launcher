@@ -30,6 +30,11 @@ vi.mock('../electron/services/session-gateway.js', () => ({
 }));
 const runtimeCheck = vi.hoisted(() => vi.fn(async (_root: string) => undefined));
 vi.mock('../electron/services/visual-cpp-runtime.js', () => ({ assertVisualCppRuntime: runtimeCheck }));
+// Off Windows the game is wrapped in Proton; these tests are about the
+// launcher's lifecycle, not about which runtime this machine happens to have.
+vi.mock('../electron/services/proton.js', () => ({ toWinePath: (value: string) => value,
+  buildProtonCommand: async (input: { executable: string; args: string[]; env: NodeJS.ProcessEnv }) =>
+    ({ command: input.executable, args: input.args, env: input.env }) }));
 
 class GameChild extends EventEmitter {
   pid: number | undefined = 4242;
@@ -103,7 +108,7 @@ describe('game lifecycle remains independent of diagnostics', () => {
     expect(f.request.presence.stop).toHaveBeenCalledOnce();
     await vi.waitFor(() => expect(f.request.onExit).toHaveBeenCalledOnce());
   });
-  it('refuses an outdated Visual C++ runtime before repairing voice or attesting', async () => {
+  it.runIf(process.platform === 'win32')('refuses an outdated Visual C++ runtime before repairing voice or attesting', async () => {
     const f = await fixture();
     f.request.attest = vi.fn(async () => ({ status: 'not-applicable', clientPatchMode: 'clean' } as const));
     runtimeCheck.mockRejectedValueOnce(new Error('runtime too old'));

@@ -434,7 +434,9 @@ export class GameLauncher {
     await assertExecutableNotRunning(join(installationRoot, "H1Z1.exe"));
     // Checked before the voice repair, attestation and ticket: on a Visual C++
     // runtime too old for rotkc.dll, H1Z1 can crash as it starts.
-    await assertVisualCppRuntime(installationRoot);
+    // Windows only: under Proton the Visual C++ runtime comes from the prefix,
+    // not from a System32 this launcher could inspect.
+    if (process.platform === "win32") await assertVisualCppRuntime(installationRoot);
     const localLogs = join(request.logsRoot, installation.installId, "local");
     const failureLogs = join(request.logsRoot, installation.installId, "failure");
     await mkdir(localLogs, { recursive: true });
